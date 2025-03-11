@@ -1,0 +1,212 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2820
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 CREATE DATABASE my_new_database;\
+USE DATABASE my_new_database;\
+--table for heart.csv in s3 AWS\
+CREATE TABLE my4_new_table (\
+    survivor integer,\
+    -- Text column for survivor status (e.g., 'yes', 'no')\
+    censors integer,\
+    -- Integer column for censors (e.g., 1 for censored, 0 for not censored)\
+    age integer -- Integer column for age (e.g., 25)\
+);\
+--table for Full_heart.csv in s3 AWS\
+CREATE TABLE my5_new_table (\
+    age INTEGER,\
+    -- Integer column for age\
+    sex BOOLEAN,\
+    -- Binary column for sex (e.g., 0 for female, 1 for male)\
+    cp INTEGER,\
+    -- Integer column for chest pain type\
+    trestbps INTEGER,\
+    -- Integer column for resting blood pressure\
+    chol INTEGER,\
+    -- Integer column for serum cholesterol\
+    fbs BOOLEAN,\
+    -- Binary column for fasting blood sugar (1 if > 120 mg/dl, 0 otherwise)\
+    restecg INTEGER,\
+    -- Integer column for resting electrocardiographic results\
+    thalach INTEGER,\
+    -- Integer column for maximum heart rate achieved\
+    exang BOOLEAN,\
+    -- Binary column for exercise induced angina (1 if yes, 0 if no)\
+    oldpeak FLOAT,\
+    -- Float column for depression induced by exercise relative to rest\
+    slope INTEGER,\
+    -- Integer column for the slope of the peak exercise ST segment\
+    ca BOOLEAN,\
+    -- Binary column for number of major vessels colored by fluoroscopy\
+    thal INTEGER,\
+    -- Integer column for thalassemia (e.g., 1, 2, 3 for normal, fixed defect, reversible defect)\
+    target INTEGER -- Integer column for target (e.g., 1 for presence of heart disease, 0 for absence)\
+);\
+--Storage for the bucket\
+CREATE STORAGE INTEGRATION my2_s3_integration TYPE = EXTERNAL_STAGE STORAGE_PROVIDER = 'S3' ENABLED = TRUE STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::209479292124:role/Snowflake_role' STORAGE_ALLOWED_LOCATIONS = ('s3://my-bucket-faranak/');\
+--Stage for heart.csv-----\
+CREATE STAGE my2_s3_stage URL = 's3://my-bucket-faranak/' STORAGE_INTEGRATION = my_s3_integration;\
+--Stage for Full_heart.csv----\
+CREATE STAGE my3_s3_stage URL = 's3://my-bucket-faranak/' STORAGE_INTEGRATION = my_s3_integration;\
+SHOW STAGES;\
+--GRANTS for heart.csv stage-------\
+SHOW GRANTS ON STAGE my2_s3_stage;\
+-- Grant USAGE on the stage to your role\
+GRANT USAGE ON STAGE my2_s3_stage TO ROLE ACCOUNTADMIN;\
+-- Grant READ on the stage to your role\
+GRANT READ ON STAGE my2_s3_stage TO ROLE ACCOUNTADMIN;\
+--------------------------------------------\
+--GRANTS for Full_heart.csv stage-------\
+SHOW GRANTS ON STAGE my3_s3_stage;\
+-- Grant USAGE on the stage to your role\
+GRANT USAGE ON STAGE my3_s3_stage TO ROLE ACCOUNTADMIN;\
+-- Grant READ on the stage to your role\
+GRANT READ ON STAGE my3_s3_stage TO ROLE ACCOUNTADMIN;\
+SHOW STAGES;\
+LIST @my2_s3_stage;\
+LIST @my3_s3_stage;\
+--------------------\
+CREATE FILE FORMAT my1_csv_format TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1;\
+-- Skips the first row since it's the header row\
+--Copy of heart.csv to my4_new_table-----\
+COPY INTO my4_new_table\
+FROM\
+    @my2_s3_stage FILE_FORMAT = my1_csv_format PATTERN = '.*heart.csv$' -- Only copy files that match the 'heart.csv' pattern\
+    ON_ERROR = 'CONTINUE';\
+    -----------------------------------------\
+    --Copy of Full_heart.csv to my5_new_table-----\
+    COPY INTO my5_new_table\
+FROM\
+    @my3_s3_stage FILE_FORMAT = my1_csv_format PATTERN = '.*Full_heart.csv$' -- Only copy files that match the 'full_heart.csv' pattern\
+    ON_ERROR = 'CONTINUE';\
+-----------------------------------------\
+SELECT\
+    *\
+FROM\
+    SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY\
+WHERE\
+    ERROR_MESSAGE IS NOT NULL;\
+--Analysis and queries\
+Select\
+    *\
+from\
+    my4_new_table\
+Select\
+    *\
+from\
+    my5_new_table SHOW TABLES IN SCHEMA MY_NEW_DATABASE.PUBLIC;\
+--query 1: No of patients surving more at least three months after diagnosis.\
+SELECT\
+    CASE\
+        WHEN AGE < 40 THEN 'Under 40'\
+        WHEN AGE BETWEEN 40\
+        AND 60 THEN '40-60'\
+        ELSE 'Over 60'\
+    END AS Age_group,\
+    COUNT(*) AS Survival_patients_more_than_90_days\
+FROM\
+    my4_new_table\
+WHERE\
+    SURVIVOR >= 90\
+    AND CENSORS = 0 -- Only include patients with survival > 60 days\
+GROUP BY\
+    1\
+ORDER BY\
+    1;\
+--Query2: Maximum survival days either followed or not for each age group\
+SELECT\
+    CASE\
+        WHEN AGE < 40 THEN 'Under 40'\
+        WHEN AGE BETWEEN 40\
+        AND 60 THEN '40-60'\
+        ELSE 'Over 60'\
+    END AS Age_group,\
+    AVG(SURVIVOR) AS avg_survival_days,\
+    MAX(SURVIVOR) AS max_survival_days,\
+    MIN(SURVIVOR) AS min_survival_days\
+FROM\
+    my4_new_table\
+GROUP BY\
+    CASE\
+        WHEN AGE < 40 THEN 'Under 40'\
+        WHEN AGE BETWEEN 40\
+        AND 60 THEN '40-60'\
+        ELSE 'Over 60'\
+    END\
+ORDER BY\
+    CASE\
+        WHEN Age_group = 'Under 40' THEN 1\
+        WHEN Age_group = '40-60' THEN 2\
+        ELSE 3\
+    END;\
+--query3: window function: Rank top survivors and find those with shortest survival time.\
+SELECT\
+    SURVIVOR,\
+    AGE,\
+    RANK() OVER (\
+        ORDER BY\
+            SURVIVOR DESC\
+    ) AS survival_rank\
+FROM\
+    my4_new_table\
+ORDER BY\
+    survival_rank\
+LIMIT\
+    20;\
+--query4:find patients who survived more than a yearand group them by age category\
+    WITH FilteredPatients AS (\
+        SELECT\
+            AGE,\
+            SURVIVOR,\
+            CASE\
+                WHEN AGE < 40 THEN 'Under 40'\
+                WHEN AGE BETWEEN 40\
+                AND 60 THEN '40-60'\
+                ELSE 'Over 60'\
+            END AS Age_Group\
+        FROM\
+            MY4_NEW_TABLE\
+        WHERE\
+            SURVIVOR > 365\
+    )\
+SELECT\
+    Age_Group,\
+    COUNT(*) AS Patient_Count\
+FROM\
+    FilteredPatients\
+GROUP BY\
+    Age_Group\
+ORDER BY\
+    Age_Group DESC;\
+--query5:Segment patients into 4 survival groups (low, mid, high, top) and find each quartile of patient live longer.\
+    WITH SurvivalQuartiles AS (\
+        SELECT\
+            AGE,\
+            SURVIVOR,\
+            NTILE(4) OVER (\
+                ORDER BY\
+                    SURVIVOR\
+            ) AS survival_quartile\
+        FROM\
+            my4_new_table\
+    )\
+SELECT\
+    survival_quartile,\
+    COUNT(*) AS patient_count,\
+    AVG(SURVIVOR) AS avg_survival_days\
+FROM\
+    SurvivalQuartiles\
+GROUP BY\
+    survival_quartile\
+ORDER BY\
+    survival_quartile;\
+SELECT\
+    CURRENT_USER();\
+SELECT\
+    CURRENT_WAREHOUSE();\
+SELECT\
+    CURRENT_DATABASE(),\
+    CURRENT_SCHEMA();}
