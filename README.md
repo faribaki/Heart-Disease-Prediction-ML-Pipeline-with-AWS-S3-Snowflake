@@ -3,7 +3,6 @@ This project develops a heart disease prediction model using AWS S3, Snowflake, 
 
 
 # Project Path
-heart-disease-ml-pipeline/
 │── data/                          
 │   ├── full_heart.csv              # CSV file with patient health records
 │
