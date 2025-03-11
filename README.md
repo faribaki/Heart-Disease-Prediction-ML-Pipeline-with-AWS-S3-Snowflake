@@ -70,7 +70,7 @@ Scikit-Learn – ML (kNN, SVM, GridSearchCV)
 6️⃣ Optimize SVM Hyperparameters using GridSearchCV
 7️⃣ Save the Best Model
 
-##Machine Learning Process
+## Machine Learning Process
 🔹 1. Data Splitting
 
 We use Scikit-Learn's train_test_split() function to divide the dataset into training and test sets.
